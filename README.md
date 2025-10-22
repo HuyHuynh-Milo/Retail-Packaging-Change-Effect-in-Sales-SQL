@@ -1,4 +1,4 @@
-# 📇 Retail-Packaging-Change-Effect-in-Sales-SQL
+# 📇 Retail-Packaging-Impact-Analysis-SQL
 🔦 This project explores the dataset of an **online supermarket** that specialises in fresh produce, analyzes **sales performance**, and investigates the impact of sustainable packaging change in all the company's areas. Utilizes **Google BigQuery and SQL.**
 
 <img width="800" height="800" alt="Cover photo" src="https://github.com/user-attachments/assets/1c0c8ec7-b337-420c-a0c9-fdb681dbaa2e" />
