@@ -451,3 +451,291 @@ ORDER BY  c.year DESC,
 
 => **Shopify** has a very **high potential** for development that needs more investment and focus. 
 
+### 🔁 3. Before and After Analysis
+- Taking the week_date value of **2020-06-15** as the baseline week where the Data Mart sustainable **packaging changes** came into effect.
+- We would include all week_date values for **2020-06-15** as the **start** of the period after the change and the previous week_date values would be before.
+
+**1. What is the total sales for the 4 weeks before and after 2020-06-15? What is the growth or reduction rate in actual values and percentage of sales?**
+
+```SQL
+     before_after AS(
+    SELECT  CASE WHEN c.week_num IN (24,25,26,27) THEN 'after'
+                 WHEN c.week_num IN (20,21,22,23) THEN 'before'
+                 ELSE 'dont care'
+            END AS period,
+            SUM(sales) AS total_sales
+    FROM weekly_sales_use w
+    LEFT JOIN calendar c
+    USING(week_date)
+    WHERE c.year = 2020
+    GROUP BY period
+    HAVING period IN ('after','before')
+)
+
+SELECT  
+        FORMAT("%'d",MAX(total_sales) - MIN(total_sales)) AS reduction_values,
+        ROUND((MAX(total_sales) - MIN(total_sales))*100/MAX(total_sales),2) AS reduction_rate
+FROM before_after
+```
+
+-Output:
+
+Row	| reduction_values	| reduction_rate
+----|-------------------|---------------
+1	  | 26,884,188	      | 1.15
+
+- The result shows that after the packaging change, the **total sales** value **reduced** by **1.15%**, at about **$26.9M**
+- In short term, sustainable packaging has a negative impact on the company's revenue.
+
+**2. What about the entire 12 weeks before and after?**
+
+```SQL
+     before_after_12w AS(
+    SELECT  CASE WHEN c.week_num BETWEEN 24 AND 35 
+                    THEN 'after'
+                 WHEN c.week_num BETWEEN 12 AND 23
+                    THEN 'before'
+                 ELSE 'dont care'
+            END AS period,
+            SUM(sales) AS total_sales
+    FROM weekly_sales_use w
+    LEFT JOIN calendar c
+    USING(week_date)
+    WHERE c.year = 2020
+    GROUP BY period
+)
+SELECT  FORMAT("%'d",MAX(total_sales) - MIN(total_sales)) AS sales_reduction,
+        ROUND((MAX(total_sales) - MIN(total_sales))*100/MAX(total_sales),2) AS reduction_rate
+FROM before_after_12w
+```
+- Output:
+
+Row	| reduction_values	| reduction_rate
+----|-------------------|---------------
+1	  | 152,325,394	      | 2.14
+
+- As compare for **12 weeks**, the sale **reduction** **$152.32M by 2.14%**.
+- For long-term (**3 months**) the negative effect **grows even stronger**.
+
+**3. How do the sale metrics for these 2 periods before and after compare with the previous years in 2018 and 2019?**
+```SQL
+     four_week AS(
+    SELECT  CASE WHEN c.week_num IN (24,25,26,27) THEN 'after'
+                 WHEN c.week_num IN (20,21,22,23) THEN 'before'
+                     ELSE 'dont care'
+            END AS period,
+            c.year,
+            SUM(sales) AS total_sales
+    FROM weekly_sales_use w
+    LEFT JOIN calendar c
+    USING(week_date)
+    GROUP BY period,
+             c.year
+    HAVING period IN ('before','after')
+    ),
+     four_w_difference AS(
+    SELECT  year,
+            MAX(CASE WHEN period = 'after' THEN total_sales
+                END) AS after_4w_sales,
+            MAX(CASE WHEN period = 'before' THEN total_sales
+                END) AS before_4w_sales,
+            MAX(CASE WHEN period = 'after' THEN total_sales END)
+                - MAX(CASE WHEN period = 'before' THEN total_sales END)
+                    AS difference,
+            SAFE_DIVIDE(MAX(CASE WHEN period ='after' THEN total_sales END)-MAX(CASE WHEN period = 'before' THEN total_sales END),
+                       MAX(CASE WHEN period = 'before' THEN total_sales END))* 100
+                    AS rate_difference
+    FROM four_week
+    GROUP BY year
+    ),
+     twelve_week AS(
+    SELECT  CASE WHEN c.week_num BETWEEN 24 AND 35 
+                    THEN 'after'
+                 WHEN c.week_num BETWEEN 12 AND 23
+                    THEN 'before'
+                 ELSE 'dont care'
+            END AS period,
+            c.year,
+            SUM(sales) AS total_sales
+    FROM weekly_sales_use w
+    LEFT JOIN calendar c
+    USING(week_date)
+    GROUP BY period,
+             c.year
+    ),
+     twelve_w_difference AS(
+    SELECT  year,
+            MAX(CASE WHEN period = 'after' THEN total_sales
+                END) AS after_12w_sales,
+            MAX(CASE WHEN period = 'before' THEN total_sales
+                END) AS before_12w_sales,
+            MAX(CASE WHEN period = 'after' THEN total_sales END)
+                - MAX(CASE WHEN period = 'before' THEN total_sales END)
+                    AS difference,
+            SAFE_DIVIDE(MAX(CASE WHEN period ='after' THEN total_sales END)-MAX(CASE WHEN period = 'before' THEN total_sales END),
+                       MAX(CASE WHEN period = 'before' THEN total_sales END))* 100
+                    AS rate_difference
+    FROM twelve_week
+    GROUP BY year    
+    )
+SELECT  f.year,
+        FORMAT("%'d",f.difference) AS _4w_difference,
+        ROUND(f.rate_difference,2) AS _4w_rate,
+        FORMAT("%'d",t.difference) AS _12w_difference,
+        ROUND(t.rate_difference,2) AS _12w_rate
+FROM four_w_difference f
+LEFT JOIN twelve_w_difference t
+USING(year)
+```
+
+- Output:
+
+| Row | Year | 4W Difference | 4W Rate | 12W Difference | 12W Rate |
+|-----|------|---------------|---------|----------------|----------|
+| 1   | 2020 | -26,884,188   | -1.15   | -152,325,394   | -2.14    |
+| 2   | 2019 | 2,336,594     | 0.10    | -20,740,294    | -0.30    |
+| 3   | 2018 | 4,102,105     | 0.19    | 104,256,193    | 1.63     |
+
+- In **2019**, the % change of total sales for the 4-week and 12-week period is small **(< 0.3%)**. In **2018** after 12 weeks of 15-06, the revenue even grew 1.63%.
+  -> The Packaging change truly made the sales decrease.
+
+### ❇️ 4. BONUS QUESTION
+- **Which areas of the business have the highest negative impact in sales metrics performance in 2020 for the 12 week before and after period?**
+  - region
+  - platform
+  - age_band
+  - demographic
+  - customer_type
+
+- For this question, I'll use  the **routine** method in BigQuery, which creates a **Procedure** to store and call when we need to use.
+- Code to create procedure:
+
+```SQL
+CREATE OR REPLACE PROCEDURE `bigquerrysandbox-416110.data_mart.calculate_sales_difference`(grouping_column STRING)
+BEGIN
+  -- 1. Khai báo các biến  
+  DECLARE sql_query STRING;
+  DECLARE join_clause STRING;
+  DECLARE select_col STRING;
+
+-- 2. Tạo các case để chèn join bảng segment_detail vào truy vấn
+  CASE 
+    WHEN grouping_column IN ('age_band','demographic') THEN
+      SET join_clause = """
+        LEFT JOIN `bigquerrysandbox-416110.data_mart.segment_detail` s
+        ON w.segment = s.segment
+        """;
+      SET select_col = FORMAT("s.%s",grouping_column);
+    ELSE 
+      SET join_clause = "";           -- Để trống phần join 
+      SET select_col = FORMAT("w.%s", grouping_column);
+  END CASE;
+
+  -- 3. Xây dựng truy vấn SQL thực hiện tính toán theo cột
+  SET sql_query = FORMAT("""        -- 3 dấu ngoặc kép để viết chuỗi nhiều dòng
+    WITH _12week AS(
+      SELECT
+          %s AS grouping_key,           --  này cho select_col
+          CASE WHEN c.week_num BETWEEN 24 AND 35 THEN 'after'
+               WHEN c.week_num BETWEEN 12 AND 23 THEN 'before'
+               ELSE 'dont care' END AS period,
+          SUM(w.sales) AS total_sales
+      FROM `bigquerrysandbox-416110.data_mart.weekly_sales_use` w 
+      LEFT JOIN `bigquerrysandbox-416110.data_mart.calendar` c 
+        ON w.week_date = c.week_date
+      %s                              --  này cho join_clause 
+      WHERE c.year = 2020
+      GROUP BY grouping_key, period
+    )
+    SELECT
+        grouping_key,
+        FORMAT("%%'d",                -- 2 %% vì là placeholder của FORMAT bên trong,nếu 1 dấu SQL sẽ nhầm và thay biến khác vào
+          MAX(CASE WHEN period = 'after' THEN total_sales END)      -- Use MAX() because GROUP BY stick with aggregate function 
+          - MAX(CASE WHEN period = 'before' THEN total_sales END)
+        ) AS difference,
+        ROUND(
+          SAFE_DIVIDE(                -- SAFE_DIVIDE để khi mẫu = 0 trả về NULL 
+            MAX(CASE WHEN period = 'after' THEN total_sales END)
+            - MAX(CASE WHEN period = 'before' THEN total_sales END),
+            MAX(CASE WHEN period = 'before' THEN total_sales END)
+          ) * 100
+          , 2) AS pct_difference
+    FROM _12week
+    GROUP BY grouping_key;
+  """, select_col, join_clause);
+
+  -- 4. Thực thi truy vấn động và trả về kết quả
+  EXECUTE IMMEDIATE sql_query;          -- Lệnh cho SQL thực thi đoạn trên
+END;
+```
+
+- To call the **procedure** and calculate the sales difference for each area:
+🌎 **region area**:
+```SQL
+CALL `bigquerrysandbox-416110.data_mart.calculate_sales_difference`('region');
+```
+| Row | Grouping Key | Difference  | % Difference |
+|-----|--------------|-------------|--------------|
+| 1   | AFRICA       | -9,146,811  | -0.54 |
+| 2   | ASIA         | -53,436,845 | -3.26 |
+| 3   | CANADA       | -8,174,013  | -1.92 |
+| 4   | EUROPE       | 5,152,392   | 4.73  |
+| 5   | OCEANIA      | -71,321,100 | -3.03 |
+| 6   | SOUTHAMERICA | -4,584,174  | -2.15 |
+| 7   | USA          | -10,814,843 | -1.60 |
+
+- **ASIA** and **OCEANIA** have a very **bad attitude** toward new packaging change, with the **decrease** of sale at **$53,4M** (**-3.26%**) for ASIA and **$71.3M** **(-3.03%)** for OCEANIA. **Stop** the campaign in these regions immediately
+- **EUROPE** has very positive sale **growth** by the change more than **$5.1M (+4.73%)**, this is the only region show the growth of sale after the change, so **keep** the campaign.
+
+📱 **platform area:**
+```SQL
+CALL `bigquerrysandbox-416110.data_mart.calculate_sales_difference`('platform');
+```
+| Row | Grouping Key  | Difference   | % Difference |
+|-----|---------------|--------------|--------------|
+| 1   | Shopify       | 15,758,440   | 7.18   |
+| 2   | Retail        | -168,083,834 | -2.43  |
+
+- The Shopify platform has a strong growth of sales, at about **15.76M (7.18%)**
+- The traditional Retail platform saw a massive decrease at **~168M (2.43%)**
+
+🤶 **age_band area:**
+```SQL
+CALL `bigquerrysandbox-416110.data_mart.calculate_sales_difference`('age_band');
+```
+| Row | Grouping Key   | Difference   | % Difference |
+|-----|----------------|--------------|--------------|
+| 1   | Young Adults   | -7,388,560   | -0.92 |
+| 2   | Middle Ages    | -22,994,292  | -1.97 |
+| 3   | Retirees       | -29,549,521  | -1.23 |
+| 4   | unknow         | -92,393,021  | -3.34 |
+
+- Every age_band saw a **decrease** of sales, especially the **Middle Ages** band **(at 1.97%)**
+
+👨‍👩‍👧 **demographic area:**
+```SQL
+CALL `bigquerrysandbox-416110.data_mart.calculate_sales_difference`('demographic');
+```
+| Row | Grouping Key  | Difference  | % Difference |
+|-----|---------------|-------------|--------------|
+| 1   | Couple        | -17,612,358 | -0.87 |
+| 2   | Family        | -42,320,015 | -1.82 |
+| 3   | unknow        | -92,393,021 | -3.34 |
+
+- Customers who have **Family** have a more negative attitude towards this change, a decrease of **42.3M (1.82%)** in sales.
+
+🙍 **customer_type area:**
+```SQL
+CALL `bigquerrysandbox-416110.data_mart.calculate_sales_difference`('customer_type');
+```
+| Row | Grouping Key  | Difference  | % Difference |
+|-----|---------------|-------------|--------------|
+| 1   | New           | 8,750,245   | 1.01  |
+| 2   | Existing      | -83,872,973 | -2.27 |
+| 3   | Guest         | -77,202,666 | -3.00 |
+
+- The **New Customers** is the only band that has a **good** feeling toward the new packaging change, a **slight growth** of sales by **8.7M (1%)**.
+- The **Existing and Guest** have a decrease by **2.27% and 3%**.
+
+### 🟢 Recommendation 
+
