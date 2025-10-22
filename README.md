@@ -174,7 +174,7 @@ Row	 | missed
 -----|---------------
 1    | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53
 
--> There are 2 range of week that missing sale value, from week 1 -> 11 and week 36 -> 53
+-> There are 2 range of week that missing sale value, from week **1 -> 11** and week **36 -> 53**
 
 **3. How many total transactions were there for each year in the dataset?**
 ```SQL
@@ -193,7 +193,7 @@ GROUP BY c.year
 | 2   | 2019 | 365,639,285        |
 | 3   | 2018 | 346,406,460        |
 
--> Number of transactions seems to grow **5.6%** in 2019 and **5.5%** in 2020 
+-> Number of transactions seems to **grow** **5.6%** in 2019 and **5.5%** in 2020 
 
 **4. What is the total sales for each region for each month?**
 ```SQL
@@ -285,7 +285,7 @@ Row  | platform	| total_transactions
 1	   | Shopify	| 5,925,169
 2	   | Retail	  | 1,081,934,227
 
-- Retail holds a huge share of the total number of transactions ( ~99.4% ).
+- **Retail** holds a huge share of the total number of transactions ( **~99.4%** ).
 
 **6. What is the percentage of sales for Retail vs Shopify for each month?**
 ```SQL
@@ -315,4 +315,139 @@ LEFT JOIN month_sales m
 USING(month)
 ORDER BY p.month, p.platform
 ```
+- Output:
+
+| Row | month  | platform  | sales_pct  |
+|-----|--------|-----------|------------|
+| 1   | 3      | Retail    | 97.54      |
+| 2   | 3      | Shopify   | 2.46       |
+| 3   | 4      | Retail    | 97.59      |
+| 4   | 4      | Shopify   | 2.41       |
+| 5   | 5      | Retail    | 97.3       |
+| 6   | 5      | Shopify   | 2.7        |
+| 7   | 6      | Retail    | 97.27      |
+| 8   | 6      | Shopify   | 2.73       |
+| 9   | 7      | Retail    | 97.29      |
+| 10  | 7      | Shopify   | 2.71       |
+| 11  | 8      | Retail    | 97.08      |
+| 12  | 8      | Shopify   | 2.92       |
+| 13  | 9      | Retail    | 97.38      |
+| 14  | 9      | Shopify   | 2.62       |
+
+- The **Retail** share of revenue is dominant throughout every month, above **97%** compared to **2%** of **Shopify**.
+
+**7. What is the percentage of sales by demographic for each year in the dataset?**
+```SQL
+,    
+     demogra_sales AS(       
+    SELECT  s.demographic,
+            c.year,
+            SUM(w.sales) total_demogra_sales
+    FROM weekly_sales_use w
+    LEFT JOIN segment_detail s
+    USING(segment) 
+    LEFT JOIN calendar c
+    USING(week_date)
+    GROUP BY s.demographic,
+             c.year
+),
+     year_sales AS(
+    SELECT  c.year,
+            SUM(sales) AS total_year_sales
+    FROM weekly_sales_use w
+    LEFT JOIN calendar c
+    USING(week_date)
+    GROUP BY c.year
+)
+SELECT d.demographic,
+        d.year,
+        d.total_demogra_sales*100/y.total_year_sales AS demogha_sales_pct
+FROM demogra_sales d
+LEFT JOIN year_sales y
+USING(year)
+ORDER BY year DESC
+```
+- Output:
+
+| Row | demographic  | year | demogha_sales_pct |
+|-----|--------------|------|-------------------|
+| 1   | Couple       | 2020 | 28.719882877863281 |
+| 2   | Family       | 2020 | 32.725289183235418 |
+| 3   | unknow       | 2020 | 38.5548279389013   |
+| 4   | Couple       | 2019 | 27.275156922552018 |
+| 5   | Family       | 2019 | 32.474230975374169 |
+| 6   | unknow       | 2019 | 40.250612102073816 |
+| 7   | Couple       | 2018 | 26.38046230965961  |
+| 8   | Family       | 2018 | 31.987564671761554 |
+| 9   | unknow       | 2018 | 41.631973018578833 |
+
+- **Family** customers make slightly **higher** revenue ( **4%** higher ) compared to **Couple** customers, its either because more customers have family or they just simply spent more money.
+- The **unknow** demographic has the highest share of revenue -> should find more information about their demographic.
+
+**8. Which age_band and demographic values contribute the most to Retail sales?**
+
+```SQL
+SELECT  
+        s.age_band,
+        s.demographic,
+        ROUND(
+          SUM(w.sales)*100/ 
+            (SELECT SUM(sales)
+             FROM weekly_sales_use
+             WHERE platform = 'Retail'),2) AS retail_sale_pct
+FROM weekly_sales_use w
+LEFT JOIN segment_detail s
+USING(segment)
+WHERE w.platform = 'Retail' 
+GROUP BY 
+         s.age_band,
+         s.demographic
+ORDER BY retail_sale_pct DESC
+```
+- Output:
+
+| Row | age_band      | demographic | retail_sale_pct |
+|-----|---------------|--------------|-----------------|
+| 1   | unknow        | unknow       | 40.52           |
+| 2   | Retirees      | Family       | 16.73           |
+| 3   | Retirees      | Couple       | 16.07           |
+| 4   | Middle Ages   | Family       | 10.98           |
+| 5   | Young Adults  | Couple       | 6.56            |
+| 6   | Middle Ages   | Couple       | 4.68            |
+| 7   | Young Adults  | Family       | 4.47            |
+
+- The **Retirees** customers contribute the most for the company's revenue with the total share at about **32.8%**, especially those who have **Family** (**16.73%**)
+
+**9. Can we use the avg_transaction column to find the average transaction size for each year for Retail vs Shopify? If not - how would you calculate it instead?**
+- No, we cannot. Because each week has a different number of transactions, but the AVG(avg_transaction) doesn't care about the number of transaction weight.
+- => We must calculate average transaction size for each year from sscratch
+
+```SQL
+SELECT  c.year,
+        w.platform,
+        ROUND(SUM(sales)/SUM(transactions),2) AS avg_transaction_value
+FROM weekly_sales_use w
+LEFT JOIN calendar c
+USING(week_date)
+GROUP BY c.year,
+         w.platform
+ORDER BY  c.year DESC,
+          w.platform
+```
+
+- Output:
+
+| Row | year | platform  | avg_transaction_value |
+|-----|------|-----------|-----------------------|
+| 1   | 2020 | Retail    | 36.56                 |
+| 2   | 2020 | Shopify   | 179.03                |
+| 3   | 2019 | Retail    | 36.83                 |
+| 4   | 2019 | Shopify   | 183.36                |
+| 5   | 2018 | Retail    | 36.56                 |
+| 6   | 2018 | Shopify   | 192.48                |
+
+- The average transaction value of **Shopify** is very high, almost **x5** compared to **Retail** platform, even though the share of total **revenue** made by Shopify is not high (**<3%**)
+- But the avg transaction value of Shopify is **decreasing** by approximately **4.7%** each year.
+
+=> **Shopify** has a very **high potential** for development that needs more investment and focus. 
 
